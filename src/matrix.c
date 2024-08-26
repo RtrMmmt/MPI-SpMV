@@ -1,5 +1,7 @@
 #include "matrix.h"
 
+//#define DYNAMIC_ROWS
+
 void coo_init_matrix(COO_Matrix *m) {
 	m->val = NULL;
 	m->row = NULL;
@@ -353,6 +355,9 @@ void MPI_coo_load_matrix(char *filename, COO_Matrix *matrix_loc, INFO_Matrix *ma
         nz_per_row[row]++;
     }
 
+	int nz_loc;
+
+#ifdef DYNAMIC_ROWS
     // 各プロセスの担当行数を計算
     int *rows_per_proc = (int *)malloc(numprocs * sizeof(int));
 	int *nz_per_proc = (int *)malloc(numprocs * sizeof(int));
@@ -388,9 +393,33 @@ void MPI_coo_load_matrix(char *filename, COO_Matrix *matrix_loc, INFO_Matrix *ma
 	start_row = my_start_row;
 	end_row = my_end_row;
 
-	int nz_loc = nz_per_proc[myid];
+	nz_loc = nz_per_proc[myid];
 
-	free(nz_per_row); free(rows_per_proc); free(nz_per_proc);
+	free(rows_per_proc); free(nz_per_proc);
+
+#else
+    int rows_per_proc = m / numprocs;
+    int extra_rows = m % numprocs;
+    int start_row = myid * rows_per_proc + (myid < extra_rows ? myid : extra_rows);
+    int end_row = start_row + rows_per_proc + (myid < extra_rows ? 1 : 0);
+
+    for (int proc = 0; proc < numprocs; proc++) {
+        int proc_rows_per_proc = m / numprocs;
+        int proc_extra_rows = m % numprocs;
+        int proc_start_row = proc * proc_rows_per_proc + (proc < proc_extra_rows ? proc : proc_extra_rows);
+        int proc_end_row = proc_start_row + proc_rows_per_proc + (proc < proc_extra_rows ? 1 : 0);
+        
+        matrix_info->recvcounts[proc] = proc_end_row - proc_start_row;
+        matrix_info->displs[proc] = proc_start_row;
+    }
+
+    nz_loc = 0;
+    for (int i = start_row; i < end_row; i++) {
+        nz_loc += nz_per_row[i];
+    }
+#endif
+
+	free(nz_per_row); 
 
     matrix_loc->rows = end_row - start_row;
     matrix_loc->cols = n;
