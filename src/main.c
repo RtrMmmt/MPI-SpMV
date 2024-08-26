@@ -26,23 +26,36 @@ int main(int argc, char *argv[]) {
     MPI_Gather(proc_name, MPI_MAX_PROCESSOR_NAME, MPI_CHAR, all_proc_names, MPI_MAX_PROCESSOR_NAME, MPI_CHAR, 0, MPI_COMM_WORLD);
 
     if (myid == 0) {
-        // Count unique node names
-        int num_nodes = 1;  // Start with 1 as there's at least one node
-        for (int i = 1; i < numprocs; i++) {
-            int is_unique = 1;
-            for (int j = 0; j < i; j++) {
-                if (strncmp(&all_proc_names[i * MPI_MAX_PROCESSOR_NAME], &all_proc_names[j * MPI_MAX_PROCESSOR_NAME], MPI_MAX_PROCESSOR_NAME) == 0) {
-                    is_unique = 0;
+        // Count processes per node
+        int *proc_count_per_node = (int *)calloc(numprocs, sizeof(int));
+        int unique_nodes = 0;
+
+        for (int i = 0; i < numprocs; i++) {
+            int found = 0;
+            for (int j = 0; j < unique_nodes; j++) {
+                if (strncmp(&all_proc_names[i * MPI_MAX_PROCESSOR_NAME], 
+                            &all_proc_names[j * MPI_MAX_PROCESSOR_NAME], MPI_MAX_PROCESSOR_NAME) == 0) {
+                    proc_count_per_node[j]++;
+                    found = 1;
                     break;
                 }
             }
-            if (is_unique) {
-                num_nodes++;
+            if (!found) {
+                strncpy(&all_proc_names[unique_nodes * MPI_MAX_PROCESSOR_NAME], 
+                        &all_proc_names[i * MPI_MAX_PROCESSOR_NAME], MPI_MAX_PROCESSOR_NAME);
+                proc_count_per_node[unique_nodes]++;
+                unique_nodes++;
             }
         }
 
-        printf("Number of node: %d\n", num_nodes);
-        printf("Number of proc: %d\n", numprocs);
+        // Display node information
+        printf("Node: %d\n", unique_nodes);
+        printf("Proc: %d\n", numprocs);
+        for (int i = 0; i < unique_nodes; i++) {
+            printf("Node %s: %d\n", &all_proc_names[i * MPI_MAX_PROCESSOR_NAME], proc_count_per_node[i]);
+        }
+
+        free(proc_count_per_node);
     }
 
     if (all_proc_names != NULL) {
