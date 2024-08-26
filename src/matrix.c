@@ -435,15 +435,22 @@ void MPI_coo_load_matrix(char *filename, COO_Matrix *matrix_loc, INFO_Matrix *ma
 
     nz_loc = 0;
     for (int i = 0; i < nz; i++) {
-        if (mm_is_pattern(code)) {
-            fscanf(file, "%d %d\n", &row, &col);
-            val = 1.0;
-        } else if (mm_is_real(code)) {
-            fscanf(file, "%d %d %lg\n", &row, &col, &val);
-        } else if (mm_is_integer(code)) {
-            fscanf(file, "%d %d %d\n", &row, &col, &ival);
-            val = (double)ival;
-        }
+		if (mm_is_pattern(code)) {
+			if (fscanf(file, "%d %d\n", &row, &col) < 2) {
+				fprintf(stderr, "ERROR: reading matrix data.\n");
+				exit(EXIT_FAILURE);
+			}
+		} else if (mm_is_real(code)) {
+			if (fscanf(file, "%d %d %lg\n", &row, &col, &val) < 3) {
+				fprintf(stderr, "ERROR: reading matrix data.\n");
+				exit(EXIT_FAILURE);
+			}
+		} else if (mm_is_integer(code)) {
+			if (fscanf(file, "%d %d %d\n", &row, &col, &ival) < 3) {
+				fprintf(stderr, "ERROR: reading matrix data.\n");
+				exit(EXIT_FAILURE);
+			}
+		}
         row--; col--;
         if (row >= start_row && row < end_row) {
             matrix_loc->row[nz_loc] = row - start_row;

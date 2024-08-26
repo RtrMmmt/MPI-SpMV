@@ -63,6 +63,8 @@ int main(int argc, char *argv[]) {
         free(all_proc_names);
     }
 
+    double start_time, end_time;
+
     char *filename = argv[1];
 
     INFO_Matrix A_info;
@@ -70,7 +72,14 @@ int main(int argc, char *argv[]) {
     A_info.displs = (int *)malloc(numprocs * sizeof(int));
 	CSR_Matrix *A_loc = (CSR_Matrix *)malloc(sizeof(CSR_Matrix));
 	csr_init_matrix(A_loc);
+
+    MPI_Barrier(MPI_COMM_WORLD); start_time = MPI_Wtime();
     MPI_csr_load_matrix(filename, A_loc, &A_info);
+    MPI_Barrier(MPI_COMM_WORLD); end_time = MPI_Wtime();
+
+    if (myid == 0) {
+        printf("IO time    : %e [sec.]\n", end_time - start_time);
+    }
 
     int loc_vec_size = A_loc->rows;
     int vec_size = A_info.rows;
@@ -101,7 +110,6 @@ int main(int argc, char *argv[]) {
     double total_time_allred = 0.0;
     MPI_Request x_req, xTy_req;
     double xTy;
-    double start_time, end_time;
 
     for (int i = 0; i < 100; i++) {
         MPI_Barrier(MPI_COMM_WORLD); start_time = MPI_Wtime();
