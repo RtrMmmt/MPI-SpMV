@@ -4,4 +4,4 @@
 #PJM -L "node=6"
 #PJM --mpi "proc=24"
 #PJM -L "elapse=10:00"
-mpirun -np 24 ./spmv data/Transport.mtx
+mpiexec -of 4-6 -n 24 ./spmv data/Transport.mtx
