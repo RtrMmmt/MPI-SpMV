@@ -53,4 +53,7 @@ void csr_mv_sym(CSR_Matrix *m, double *x, double *y);
 void MPI_coo_load_matrix(char *filename, COO_Matrix *matrix_loc, INFO_Matrix *matrix_info);
 void MPI_csr_load_matrix(char *filename, CSR_Matrix *matrix_loc, INFO_Matrix *matrix_info);
 
+void MPI_csr_spmv(CSR_Matrix *matrix_loc, INFO_Matrix *matrix_info, double *x_loc, double **x_recv, double *y_loc, int numprocs, int myid, int *recv_procs);
+void mult(CSR_Matrix* A_loc, double* x_part, double* y_loc, int start_index, int end_index);
+
 #endif // MATRIX_H

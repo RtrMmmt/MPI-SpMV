@@ -471,3 +471,67 @@ void MPI_csr_load_matrix(char *filename, CSR_Matrix *matrix_loc, INFO_Matrix *ma
 	coo2csr(temp, matrix_loc);
     coo_free_matrix(temp); free(temp);
 }
+
+void MPI_csr_spmv(CSR_Matrix *matrix_loc, INFO_Matrix *matrix_info, double *x_loc, double **x_recv, double *y_loc, int numsend, int myid, int *recv_procs) {
+	int i, j, recvs_outstanding, completed, idx, recv_idx, start_idx, end_idx;
+	int row, col_idx;
+	
+	MPI_Request req[numsend];
+	MPI_Status stat[numsend];
+	int indices[numsend];
+
+	recvs_outstanding = numsend;
+
+    for (i = 0; i < numsend; i++) {
+        MPI_Isend(x_loc, matrix_info->recvcounts[myid], MPI_DOUBLE, recv_procs[i], 0, MPI_COMM_WORLD, &req[i]);
+        MPI_Irecv(x_recv[i], matrix_info->recvcounts[recv_procs[i]], MPI_DOUBLE, recv_procs[i], 0, MPI_COMM_WORLD, &req[i]);
+    }
+
+    for (row = 0; row < matrix_loc->rows; row++) {
+        y_loc[row] = 0.0;
+    }
+
+	start_idx = matrix_info->displs[myid];
+	end_idx = start_idx + matrix_info->recvcounts[myid];
+	mult(matrix_loc, x_loc, y_loc, start_idx, end_idx);
+
+    while (recvs_outstanding > 0) {
+        MPI_Waitsome(numsend, req, &completed, indices, stat);
+
+		if (myid == 0) printf("%d\n", completed);
+
+        for (i = 0; i < completed; i++) {
+            idx = stat[i].MPI_SOURCE;
+            recv_idx = -1;
+
+            // 受信元プロセスを探す
+            for (j = 0; j < numsend; j++) {
+                if (recv_procs[j] == idx) {
+                    recv_idx = j;
+                    break;
+                }
+            }
+
+            if (recv_idx != -1) {
+                start_idx = matrix_info->displs[recv_procs[recv_idx]];
+				end_idx = start_idx + matrix_info->recvcounts[recv_procs[recv_idx]];
+				mult(matrix_loc, x_recv[recv_idx], y_loc, start_idx, end_idx);
+                recvs_outstanding--;
+            }
+        }
+    }
+
+}
+
+void mult(CSR_Matrix* A_loc, double* x_part, double* y_loc, int start_index, int end_index) {
+    int row, idx, global_idx, local_idx;
+	for (row = 0; row < A_loc->rows; row++) {
+        for (idx = A_loc->ptr[row]; idx < A_loc->ptr[row + 1]; idx++) {
+            global_idx = A_loc->col[idx];
+            if (global_idx >= start_index && global_idx < end_index) {
+                local_idx = global_idx - start_index;
+                y_loc[row] += A_loc->val[idx] * x_part[local_idx];
+            }
+        }
+    }
+}
