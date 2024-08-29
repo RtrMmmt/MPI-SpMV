@@ -70,15 +70,24 @@ int main(int argc, char *argv[]) {
     INFO_Matrix A_info;
     A_info.recvcounts = (int *)malloc(numprocs * sizeof(int));
     A_info.displs = (int *)malloc(numprocs * sizeof(int));
-	CSR_Matrix *A_loc = (CSR_Matrix *)malloc(sizeof(CSR_Matrix));
-	csr_init_matrix(A_loc);
+	CSR_Matrix *A_loc = (CSR_Matrix *)malloc(sizeof(CSR_Matrix)); csr_init_matrix(A_loc);
+    CSR_Matrix *A_loc_diag = (CSR_Matrix *)malloc(sizeof(CSR_Matrix)); csr_init_matrix(A_loc_diag);
+    CSR_Matrix *A_loc_offd = (CSR_Matrix *)malloc(sizeof(CSR_Matrix)); csr_init_matrix(A_loc_offd);
 
     MPI_Barrier(MPI_COMM_WORLD); start_time = MPI_Wtime();
     MPI_csr_load_matrix(filename, A_loc, &A_info);
     MPI_Barrier(MPI_COMM_WORLD); end_time = MPI_Wtime();
 
     if (myid == 0) {
-        printf("IO time       : %e [sec.]\n", end_time - start_time);
+        printf("IO(all) time  : %e [sec.]\n", end_time - start_time);
+    }
+
+    MPI_Barrier(MPI_COMM_WORLD); start_time = MPI_Wtime();
+    MPI_csr_load_matrix_block(filename, A_loc_diag, A_loc_offd, &A_info);
+    MPI_Barrier(MPI_COMM_WORLD); end_time = MPI_Wtime();
+
+    if (myid == 0) {
+        printf("IO(d&o) time  : %e [sec.]\n", end_time - start_time);
     }
 
     int loc_vec_size = A_loc->rows;
@@ -118,21 +127,16 @@ int main(int argc, char *argv[]) {
     }
 
     MPI_Barrier(MPI_COMM_WORLD); start_time = MPI_Wtime();
-    MPI_csr_spmv(A_loc, &A_info, x_loc, x_recv, y_loc, numsend, myid, recv_procs);
+    MPI_csr_spmv_async(A_loc_diag, A_loc_offd, &A_info, x_loc, x_recv, y_loc, numsend, myid, recv_procs);
     MPI_Barrier(MPI_COMM_WORLD); end_time = MPI_Wtime();
-
-    if (myid == 0) {
-        printf("SpMV(s&r) time: %e [sec.]\n", end_time - start_time);
-    }
 
     MPI_Barrier(MPI_COMM_WORLD); start_time = MPI_Wtime();
-    MPI_Allgatherv(x_loc, loc_vec_size, MPI_DOUBLE, x, A_info.recvcounts, A_info.displs, MPI_DOUBLE, MPI_COMM_WORLD);
-    csr_mv(A_loc, x, y_loc_ans);
+    MPI_csr_spmv_ovlap(A_loc_diag, A_loc_offd, &A_info, x_loc, x, y_loc);
     MPI_Barrier(MPI_COMM_WORLD); end_time = MPI_Wtime();
 
-    if (myid == 0) {
-        printf("SpMV(all) time: %e [sec.]\n", end_time - start_time);
-    }
+    MPI_Barrier(MPI_COMM_WORLD); start_time = MPI_Wtime();
+    MPI_csr_spmv(A_loc, &A_info, x_loc, x, y_loc_ans);
+    MPI_Barrier(MPI_COMM_WORLD); end_time = MPI_Wtime();
 
     double local_sum = 0.0;
     double global_sum = 0.0;
@@ -147,6 +151,8 @@ int main(int argc, char *argv[]) {
     }
 
 	csr_free_matrix(A_loc); free(A_loc);
+    csr_free_matrix(A_loc_diag); free(A_loc_diag);
+    csr_free_matrix(A_loc_offd); free(A_loc_offd);
     free(x_loc); free(y_loc); free(y_loc_ans); free(x); //free(y); 
     free(A_info.recvcounts);  free(A_info.displs);
 
